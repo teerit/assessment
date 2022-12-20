@@ -9,6 +9,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -62,6 +63,39 @@ func TestExpenseCreate(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	err = h.CreateExpenseHandler(c)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, rec.Code)
+	if assert.NoError(t, err) {
+		assert.Equal(t, http.StatusCreated, rec.Code)
+	}
+}
+
+func TestExpenseGetById(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	// mock result
+	mockTags := []string{"food", "beverage"}
+	mockRow := sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).
+		AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array(&mockTags))
+	// expected
+	expected := "{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}\n"
+
+	db, mock, err := sqlmock.New()
+	mock.ExpectQuery(
+		"SELECT (.+) FROM expenses WHERE id=\\$1").WithArgs(sqlmock.AnyArg()).WillReturnRows(mockRow)
+
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	h := handler{db}
+	c := e.NewContext(req, rec)
+	c.SetPath("/expenses/:id")
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err = h.GetExpenseByIdHandler(c)
+
+	if assert.NoError(t, err) {
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, expected, rec.Body.String())
+	}
 }
