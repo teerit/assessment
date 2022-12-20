@@ -25,6 +25,14 @@ var (
 	}`
 )
 
+func testWrapper(jsonString string) (*http.Request, *httptest.ResponseRecorder, *echo.Echo) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/expenses", strings.NewReader(jsonString))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	return req, rec, e
+}
+
 func TestExpenseModelNotNil(t *testing.T) {
 	exp := &Expense{
 		Id:     1,
@@ -52,177 +60,193 @@ func TestExpenseHandler(t *testing.T) {
 }
 
 func TestExpenseCreate(t *testing.T) {
-	req, rec, e := testWrapper(expenseJson)
-	newsMockRows := sqlmock.NewRows([]string{"id"}).AddRow("1")
-	db, mock, err := sqlmock.New()
-	mock.ExpectQuery(
-		"INSERT INTO expenses \\(title, amount, note, tags\\) values \\(\\$1, \\$2, \\$3, \\$4\\) RETURNING id").WithArgs(
-		sqlmock.AnyArg(),
-		sqlmock.AnyArg(),
-		sqlmock.AnyArg(),
-		sqlmock.AnyArg()).WillReturnRows(newsMockRows)
-
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	h := handler{db}
-	c := e.NewContext(req, rec)
-
-	err = h.CreateExpenseHandler(c)
-	if assert.NoError(t, err) {
-		assert.Equal(t, http.StatusCreated, rec.Code)
+	tests := []struct {
+		name         string
+		expectedCode int
+		mockRows     *sqlmock.Rows
+	}{
+		{
+			name:         "TestExpenseCreateSuccess",
+			expectedCode: http.StatusCreated,
+			mockRows:     sqlmock.NewRows([]string{"id"}).AddRow("1"),
+		},
+		{
+			name:         "TestExpenseCreateInternalServerError",
+			expectedCode: http.StatusInternalServerError,
+			mockRows:     sqlmock.NewRows([]string{"id"}).AddRow("xxx"),
+		},
 	}
 
-	t.Run("TestExpenseCreateInternalServerError", func(t *testing.T) {
-		req, rec, e := testWrapper(expenseJson)
-		db, mock, err := sqlmock.New()
-		mock.ExpectQuery(
-			"INSERT INTO expenses \\(title, amount, note, tags\\) values \\(\\$1, \\$2, \\$3, \\$4\\) RETURNING id").WithArgs(
-			sqlmock.AnyArg(),
-			sqlmock.AnyArg(),
-			sqlmock.AnyArg(),
-			sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("xxx"))
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req, rec, e := testWrapper(expenseJson)
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+			}
 
-		if err != nil {
-			t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-		}
-		h := handler{db}
-		c := e.NewContext(req, rec)
+			mock.ExpectQuery(
+				"INSERT INTO expenses \\(title, amount, note, tags\\) values \\(\\$1, \\$2, \\$3, \\$4\\) RETURNING id").
+				WithArgs(
+					sqlmock.AnyArg(),
+					sqlmock.AnyArg(),
+					sqlmock.AnyArg(),
+					sqlmock.AnyArg()).WillReturnRows(test.mockRows)
 
-		err = h.CreateExpenseHandler(c)
-		if assert.NoError(t, err) {
-			assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		}
+			h := handler{db}
+			c := e.NewContext(req, rec)
 
-	})
+			err = h.CreateExpenseHandler(c)
+			if assert.NoError(t, err) {
+				assert.Equal(t, test.expectedCode, rec.Code)
+			}
+		})
+	}
 }
 
 func TestExpenseGetById(t *testing.T) {
-	req, rec, e := testWrapper("")
-
-	// mock result
-	mockRow := sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).
-		AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array([]string{"food", "beverage"}))
-	// expected
-	expected := "{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}\n"
-
-	db, mock, err := sqlmock.New()
-	mock.ExpectQuery(
-		"SELECT (.+) FROM expenses WHERE id=\\$1").WithArgs(sqlmock.AnyArg()).WillReturnRows(mockRow)
-
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	tests := []struct {
+		name         string
+		paramValue   string
+		expectedCode int
+		expectedBody string
+		mockRows     *sqlmock.Rows
+	}{
+		{
+			name:         "TestExpenseGetSuccess",
+			paramValue:   "1",
+			expectedCode: http.StatusOK,
+			expectedBody: "{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}\n",
+			mockRows: sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).
+				AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array([]string{"food", "beverage"})),
+		},
 	}
-	h := handler{db}
-	c := e.NewContext(req, rec)
-	c.SetPath("/expenses/:id")
-	c.SetParamNames("id")
-	c.SetParamValues("1")
-	err = h.GetExpenseByIdHandler(c)
 
-	if assert.NoError(t, err) {
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, expected, rec.Body.String())
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req, rec, e := testWrapper("")
+			db, mock, err := sqlmock.New()
+
+			if err != nil {
+				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+			}
+
+			mock.ExpectQuery(
+				"SELECT (.+) FROM expenses WHERE id=\\$1").WithArgs(sqlmock.AnyArg()).
+				WillReturnRows(test.mockRows)
+
+			h := handler{db}
+			c := e.NewContext(req, rec)
+			c.SetPath("/expenses/:id")
+			c.SetParamNames("id")
+			c.SetParamValues(test.paramValue)
+			err = h.GetExpenseByIdHandler(c)
+
+			if assert.NoError(t, err) {
+				assert.Equal(t, test.expectedCode, rec.Code)
+				assert.Equal(t, test.expectedBody, rec.Body.String())
+			}
+		})
 	}
 }
 
 func TestExpenseUpdateById(t *testing.T) {
-	req, rec, e := testWrapper(expenseJson)
-	id := "1"
-
-	mockTags := []string{"food", "beverage"}
-
-	// expected
-	expected := "{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}\n"
-
-	db, mock, err := sqlmock.New()
-	stmt := mock.ExpectPrepare("UPDATE expenses SET title=\\$2, amount=\\$3, note=\\$4, tags=\\$5 WHERE id=\\$1")
-	stmt.ExpectExec().
-		WithArgs(
-			1,
-			"strawberry smoothie",
-			79.00,
-			"night market promotion discount 10 bath",
-			pq.Array(mockTags)).WillReturnResult(sqlmock.NewResult(1, 1))
-
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	h := handler{db}
-	c := e.NewContext(req, rec)
-	c.SetPath("/expenses/:id")
-	c.SetParamNames("id")
-	c.SetParamValues(id)
-	err = h.UpdateExpenseHandler(c)
-
-	// assertion
-	if assert.NoError(t, err) {
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, expected, rec.Body.String())
+	tests := []struct {
+		name           string
+		requestBody    string
+		pathParam      string
+		tags           []string
+		expected       string
+		expectedStatus int
+	}{
+		{
+			name:           "TestExpenseUpdateSuccess",
+			requestBody:    expenseJson,
+			pathParam:      "1",
+			tags:           []string{"food", "beverage"},
+			expected:       "{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}\n",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "TestExpenseUpdateBadRequest",
+			requestBody:    expenseJson,
+			pathParam:      "",
+			tags:           []string{"food", "beverage"},
+			expected:       "{\"message\":\"strconv.Atoi: parsing \\\"\\\": invalid syntax\"}\n",
+			expectedStatus: http.StatusBadRequest,
+		},
 	}
 
-	t.Run("TestExpenseUpdateByIdBadRequest", func(t *testing.T) {
-		req, rec, e := testWrapper(expenseJson)
-		// mock empty path param
-		id := ""
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req, rec, e := testWrapper(test.requestBody)
 
-		db, mock, err := sqlmock.New()
-		stmt := mock.ExpectPrepare("UPDATE expenses SET title=\\$2, amount=\\$3, note=\\$4, tags=\\$5 WHERE id=\\$1")
-		stmt.ExpectExec().
-			WithArgs(
-				1,
-				"strawberry smoothie",
-				79.00,
-				"night market promotion discount 10 bath",
-				pq.Array([]string{"food", "beverage"})).WillReturnResult(sqlmock.NewResult(1, 1))
+			db, mock, err := sqlmock.New()
+			stmt := mock.ExpectPrepare("UPDATE expenses SET title=\\$2, amount=\\$3, note=\\$4, tags=\\$5 WHERE id=\\$1")
+			stmt.ExpectExec().
+				WithArgs(
+					1,
+					"strawberry smoothie",
+					79.00,
+					"night market promotion discount 10 bath",
+					pq.Array(test.tags)).WillReturnResult(sqlmock.NewResult(1, 1))
 
-		if err != nil {
-			t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-		}
-		h := handler{db}
-		c := e.NewContext(req, rec)
-		c.SetPath("/expenses/:id")
-		c.SetParamNames("id")
-		c.SetParamValues(id)
-		err = h.UpdateExpenseHandler(c)
+			if err != nil {
+				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+			}
+			h := handler{db}
+			c := e.NewContext(req, rec)
+			c.SetPath("/expenses/:id")
+			c.SetParamNames("id")
+			c.SetParamValues(test.pathParam)
+			err = h.UpdateExpenseHandler(c)
 
-		// assertion
-		if assert.NoError(t, err) {
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
-		}
-	})
+			// assertion
+			if assert.NoError(t, err) {
+				assert.Equal(t, test.expectedStatus, rec.Code)
+				assert.Equal(t, test.expected, rec.Body.String())
+			}
+		})
+	}
 }
 
 func TestExpenseGetAll(t *testing.T) {
-	req, rec, e := testWrapper("")
-
-	// mock result
-	mockTags := []string{"food", "beverage"}
-	mockRows := sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).
-		AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array(&mockTags))
-
-	// expected return
-	expected := "[{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}]"
-	db, mock, err := sqlmock.New()
-	mock.ExpectQuery("SELECT (.+) FROM expenses").WillReturnRows(mockRows)
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	tests := []struct {
+		name           string
+		requestBody    string
+		tags           []string
+		expected       string
+		expectedStatus int
+	}{
+		{
+			name:           "test case 1",
+			requestBody:    "",
+			tags:           []string{"food", "beverage"},
+			expected:       "[{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}]",
+			expectedStatus: http.StatusOK,
+		},
 	}
-	h := handler{db}
-	c := e.NewContext(req, rec)
 
-	err = h.GetExpensesHandler(c)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req, rec, e := testWrapper(test.requestBody)
 
-	if assert.NoError(t, err) {
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, expected, strings.TrimSpace(rec.Body.String()))
+			mockRows := sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).
+				AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array(&test.tags))
+
+			db, mock, err := sqlmock.New()
+			mock.ExpectQuery("SELECT (.+) FROM expenses").WillReturnRows(mockRows)
+			if err != nil {
+				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+			}
+			h := handler{db}
+			c := e.NewContext(req, rec)
+
+			err = h.GetExpensesHandler(c)
+			if assert.NoError(t, err) {
+				assert.Equal(t, test.expectedStatus, rec.Code)
+				assert.Equal(t, test.expected, strings.TrimSpace(rec.Body.String()))
+			}
+		})
 	}
-}
-
-func testWrapper(jsonString string) (*http.Request, *httptest.ResponseRecorder, *echo.Echo) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/expenses", strings.NewReader(jsonString))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	return req, rec, e
 }
