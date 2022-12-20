@@ -2,23 +2,24 @@ package expense
 
 // unit test
 import (
-	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	expenseJson = bytes.NewBufferString(`{
+	expenseJson = `{
 		"title": "strawberry smoothie",
 		"amount": 79,
 		"note": "night market promotion discount 10 bath", 
 		"tags": ["food", "beverage"]
-	}`)
+	}`
 )
 
 func TestExpenseModelNotNil(t *testing.T) {
@@ -42,7 +43,7 @@ func TestExpenseModelNotNil(t *testing.T) {
 func TestExpenseCreate(t *testing.T) {
 	// Arrange
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/expenses", expenseJson)
+	req := httptest.NewRequest(http.MethodGet, "/expenses", strings.NewReader(expenseJson))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 
@@ -64,4 +65,43 @@ func TestExpenseCreate(t *testing.T) {
 	err = h.CreateExpenseHandler(c)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, rec.Code)
+}
+
+func TestExpenseUpdateById(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(expenseJson))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	id := "1"
+
+	mockTags := []string{"food", "beverage"}
+
+	// expected
+	expected := "{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}\n"
+
+	db, mock, err := sqlmock.New()
+	stmt := mock.ExpectPrepare("UPDATE expenses SET title=\\$2, amount=\\$3, note=\\$4, tags=\\$5 WHERE id=\\$1")
+	stmt.ExpectExec().
+		WithArgs(
+			1,
+			"strawberry smoothie",
+			79.00,
+			"night market promotion discount 10 bath",
+			pq.Array(mockTags)).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	h := handler{db}
+	c := e.NewContext(req, rec)
+	c.SetPath("/expenses/:id")
+	c.SetParamNames("id")
+	c.SetParamValues(id)
+	err = h.UpdateExpenseHandler(c)
+
+	// assertion
+	if assert.NoError(t, err) {
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, expected, rec.Body.String())
+	}
 }
