@@ -1,4 +1,5 @@
 //go:build unit
+// +build unit
 
 package expense
 
@@ -42,13 +43,16 @@ func TestExpenseModelNotNil(t *testing.T) {
 	}
 }
 
-func TestExpenseCreate(t *testing.T) {
-	// Arrange
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/expenses", strings.NewReader(expenseJson))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
+func TestExpenseHandler(t *testing.T) {
+	db, _, err := sqlmock.New()
+	con := ExpenseHandler(db)
+	if assert.NoError(t, err) {
+		assert.NotNil(t, con)
+	}
+}
 
+func TestExpenseCreate(t *testing.T) {
+	req, rec, e := testWrapper(expenseJson)
 	newsMockRows := sqlmock.NewRows([]string{"id"}).AddRow("1")
 	db, mock, err := sqlmock.New()
 	mock.ExpectQuery(
@@ -68,17 +72,37 @@ func TestExpenseCreate(t *testing.T) {
 	if assert.NoError(t, err) {
 		assert.Equal(t, http.StatusCreated, rec.Code)
 	}
+
+	t.Run("TestExpenseCreateInternalServerError", func(t *testing.T) {
+		req, rec, e := testWrapper(expenseJson)
+		db, mock, err := sqlmock.New()
+		mock.ExpectQuery(
+			"INSERT INTO expenses \\(title, amount, note, tags\\) values \\(\\$1, \\$2, \\$3, \\$4\\) RETURNING id").WithArgs(
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("xxx"))
+
+		if err != nil {
+			t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		}
+		h := handler{db}
+		c := e.NewContext(req, rec)
+
+		err = h.CreateExpenseHandler(c)
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		}
+
+	})
 }
 
 func TestExpenseGetById(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
+	req, rec, e := testWrapper("")
 
 	// mock result
-	mockTags := []string{"food", "beverage"}
 	mockRow := sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).
-		AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array(&mockTags))
+		AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array([]string{"food", "beverage"}))
 	// expected
 	expected := "{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}\n"
 
@@ -103,10 +127,7 @@ func TestExpenseGetById(t *testing.T) {
 }
 
 func TestExpenseUpdateById(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(expenseJson))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
+	req, rec, e := testWrapper(expenseJson)
 	id := "1"
 
 	mockTags := []string{"food", "beverage"}
@@ -139,18 +160,46 @@ func TestExpenseUpdateById(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Equal(t, expected, rec.Body.String())
 	}
+
+	t.Run("TestExpenseUpdateByIdBadRequest", func(t *testing.T) {
+		req, rec, e := testWrapper(expenseJson)
+		// mock empty path param
+		id := ""
+
+		db, mock, err := sqlmock.New()
+		stmt := mock.ExpectPrepare("UPDATE expenses SET title=\\$2, amount=\\$3, note=\\$4, tags=\\$5 WHERE id=\\$1")
+		stmt.ExpectExec().
+			WithArgs(
+				1,
+				"strawberry smoothie",
+				79.00,
+				"night market promotion discount 10 bath",
+				pq.Array([]string{"food", "beverage"})).WillReturnResult(sqlmock.NewResult(1, 1))
+
+		if err != nil {
+			t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		}
+		h := handler{db}
+		c := e.NewContext(req, rec)
+		c.SetPath("/expenses/:id")
+		c.SetParamNames("id")
+		c.SetParamValues(id)
+		err = h.UpdateExpenseHandler(c)
+
+		// assertion
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		}
+	})
 }
 
 func TestExpenseGetAll(t *testing.T) {
-	// Arrange
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/expenses", strings.NewReader(""))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
+	req, rec, e := testWrapper("")
 
 	// mock result
 	mockTags := []string{"food", "beverage"}
-	mockRows := sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array(&mockTags))
+	mockRows := sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).
+		AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array(&mockTags))
 
 	// expected return
 	expected := "[{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}]"
@@ -168,4 +217,12 @@ func TestExpenseGetAll(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Equal(t, expected, strings.TrimSpace(rec.Body.String()))
 	}
+}
+
+func testWrapper(jsonString string) (*http.Request, *httptest.ResponseRecorder, *echo.Echo) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/expenses", strings.NewReader(jsonString))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	return req, rec, e
 }

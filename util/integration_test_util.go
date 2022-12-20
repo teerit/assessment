@@ -1,4 +1,4 @@
-package expense
+package util
 
 import (
 	"encoding/json"
@@ -9,10 +9,10 @@ import (
 	"strings"
 )
 
-const serverPort = 80
+const ServerPort = 80
 
 func Uri(paths ...string) string {
-	host := fmt.Sprintf("http://localhost:%d", serverPort)
+	host := fmt.Sprintf("http://localhost:%d", ServerPort)
 	if paths == nil {
 		return host
 	}
