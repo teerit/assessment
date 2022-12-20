@@ -33,12 +33,12 @@ func Request(method, url string, body io.Reader) *Response {
 
 type Response struct {
 	*http.Response
-	err error
+	Err error
 }
 
 func (r *Response) Decode(v interface{}) error {
-	if r.err != nil {
-		return r.err
+	if r.Err != nil {
+		return r.Err
 	}
 
 	return json.NewDecoder(r.Body).Decode(v)
