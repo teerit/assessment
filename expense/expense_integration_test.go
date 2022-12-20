@@ -1,4 +1,5 @@
 //go:build integration
+// +build integration
 
 package expense
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/teerit/assessment/util"
 )
 
 func TestITExpenses(t *testing.T) {
@@ -34,10 +36,10 @@ func TestITExpenses(t *testing.T) {
 		e.GET("/expenses", h.GetExpensesHandler)
 		e.PUT("/expenses/:id", h.UpdateExpenseHandler)
 
-		e.Start(fmt.Sprintf(":%d", serverPort))
+		e.Start(fmt.Sprintf(":%d", util.ServerPort))
 	}(eh)
 	for {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", serverPort), 30*time.Second)
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", util.ServerPort), 30*time.Second)
 		if err != nil {
 			log.Println(err)
 		}
@@ -51,7 +53,7 @@ func TestITExpenses(t *testing.T) {
 		seedExpense(t)
 		var exps []Expense
 
-		res := Request(http.MethodGet, Uri("expenses"), nil)
+		res := util.Request(http.MethodGet, util.Uri("expenses"), nil)
 		err := res.Decode(&exps)
 
 		assert.Nil(t, err)
@@ -63,7 +65,7 @@ func TestITExpenses(t *testing.T) {
 		c := seedExpense(t)
 
 		var lastExp Expense
-		res := Request(http.MethodGet, Uri("expenses", strconv.Itoa(c.Id)), nil)
+		res := util.Request(http.MethodGet, util.Uri("expenses", strconv.Itoa(c.Id)), nil)
 		err := res.Decode(&lastExp)
 
 		assert.Nil(t, err)
@@ -84,7 +86,7 @@ func TestITExpenses(t *testing.T) {
 			Tags:   []string{"food", "beverage"},
 		}
 		payload, _ := json.Marshal(c)
-		res := Request(http.MethodPut, Uri("expenses", strconv.Itoa(id)), bytes.NewBuffer(payload))
+		res := util.Request(http.MethodPut, util.Uri("expenses", strconv.Itoa(id)), bytes.NewBuffer(payload))
 		var info Expense
 		err := res.Decode(&info)
 
@@ -104,7 +106,7 @@ func TestITExpenses(t *testing.T) {
 		}`)
 		var exp Expense
 
-		res := Request(http.MethodPost, Uri("expenses"), body)
+		res := util.Request(http.MethodPost, util.Uri("expenses"), body)
 		err := res.Decode(&exp)
 
 		assert.Nil(t, err)
@@ -129,7 +131,7 @@ func seedExpense(t *testing.T) Expense {
 		"note": "night market promotion discount 10 bath", 
 		"tags": ["food", "beverage"]
 	}`)
-	err := Request(http.MethodPost, Uri("expenses"), body).Decode(&c)
+	err := util.Request(http.MethodPost, util.Uri("expenses"), body).Decode(&c)
 	if err != nil {
 		t.Fatal("can't create expense:", err)
 	}
