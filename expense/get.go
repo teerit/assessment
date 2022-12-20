@@ -1,6 +1,7 @@
 package expense
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
 
@@ -21,6 +22,9 @@ func (h *handler) GetExpenseByIdHandler(c echo.Context) error {
 	exp := Expense{}
 	err = row.Scan(&exp.Id, &exp.Title, &exp.Amount, &exp.Note, pq.Array(&exp.Tags))
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.JSON(http.StatusNotFound, Err{Message: "expense not found with given id"})
+		}
 		return c.JSON(http.StatusInternalServerError, Err{Message: err.Error()})
 	}
 
