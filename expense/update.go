@@ -16,7 +16,6 @@ func (h *handler) UpdateExpenseHandler(c echo.Context) error {
 	}
 
 	exp := Expense{}
-	// find by id
 	err = c.Bind(&exp)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, Err{Message: err.Error()})

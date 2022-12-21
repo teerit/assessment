@@ -23,6 +23,13 @@ var (
 		"note": "night market promotion discount 10 bath", 
 		"tags": ["food", "beverage"]
 	}`
+
+	expenseBadRequestJson = `{
+		"title": "strawberry smoothie",
+		"amount": 79xx,
+		"note": "night market promotion discount 10 bath", 
+		"tags": ["food", "beverage"]
+	}`
 )
 
 func testWrapper(jsonString string) (*http.Request, *httptest.ResponseRecorder, *echo.Echo) {
@@ -64,22 +71,31 @@ func TestExpenseCreate(t *testing.T) {
 		name         string
 		expectedCode int
 		mockRows     *sqlmock.Rows
+		json         string
 	}{
 		{
 			name:         "TestExpenseCreateSuccess",
 			expectedCode: http.StatusCreated,
 			mockRows:     sqlmock.NewRows([]string{"id"}).AddRow("1"),
+			json:         expenseJson,
+		},
+		{
+			name:         "TestExpenseCreateBadRequest",
+			expectedCode: http.StatusBadRequest,
+			mockRows:     sqlmock.NewRows([]string{"id"}).AddRow("1"),
+			json:         expenseBadRequestJson,
 		},
 		{
 			name:         "TestExpenseCreateInternalServerError",
 			expectedCode: http.StatusInternalServerError,
 			mockRows:     sqlmock.NewRows([]string{"id"}).AddRow("xxx"),
+			json:         expenseJson,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			req, rec, e := testWrapper(expenseJson)
+			req, rec, e := testWrapper(test.json)
 			db, mock, err := sqlmock.New()
 			if err != nil {
 				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)

@@ -1,0 +1,21 @@
+## Start Application ##
+DATABASE_URL="{{DB_CREDENTIAL}}" PORT="2565" go run server.go
+
+## Unit test ##
+go test -v ./... -tags=unit
+
+## Integration test ##
+docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from it_tests
+
+## Teardown ##
+docker-compose -f docker-compose.test.yml down
+
+## Multistage build ##
+docker build -t assessment:multi .
+
+## Multistage run docker ##
+docker run --env DATABASE_URL='{{DB_CREDENTIAL}}' --env PORT='2565' -p 2565:2565 assessment:multi
+
+
+## Go fmt format all ##
+go fmt github.com/teerit/assessment/...
