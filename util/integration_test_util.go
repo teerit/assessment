@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -23,7 +22,8 @@ func Uri(paths ...string) string {
 
 func Request(method, url string, body io.Reader) *Response {
 	req, _ := http.NewRequest(method, url, body)
-	token := os.Getenv("AUTH_TOKEN")
+	// token := os.Getenv("AUTH_TOKEN")
+	token := "November 10, 2009"
 	req.Header.Add("Authorization", token)
 	req.Header.Add("Content-Type", "application/json")
 	client := http.Client{}
