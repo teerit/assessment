@@ -74,6 +74,22 @@ func TestITExpenses(t *testing.T) {
 		assert.NotEmpty(t, lastExp.Title)
 		assert.NotEmpty(t, lastExp.Amount)
 		assert.NotEmpty(t, lastExp.Note)
+
+		t.Run("TestGetExpenseByIdNotFound", func(t *testing.T) {
+			var lastExp Expense
+			res := util.Request(http.MethodGet, util.Uri("expenses", "0"), nil)
+			err := res.Decode(&lastExp)
+			assert.Nil(t, err)
+			assert.Equal(t, http.StatusNotFound, res.StatusCode)
+		})
+
+		t.Run("TestGetExpenseByIdBadRequest", func(t *testing.T) {
+			var lastExp Expense
+			res := util.Request(http.MethodGet, util.Uri("expenses", "xxx"), nil)
+			err := res.Decode(&lastExp)
+			assert.Nil(t, err)
+			assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+		})
 	})
 
 	t.Run("TestUpdateExpense", func(t *testing.T) {
@@ -115,6 +131,22 @@ func TestITExpenses(t *testing.T) {
 		assert.Equal(t, "strawberry smoothie", exp.Title)
 		assert.Equal(t, 79.0, exp.Amount)
 		assert.Equal(t, "night market promotion discount 10 bath", exp.Note)
+
+		t.Run("TestCreateExpenseBadRequest", func(t *testing.T) {
+			body := bytes.NewBufferString(`{
+				"title": "strawberry smoothie",
+				"amount": 79xx,
+				"note": "night market promotion discount 10 bath", 
+				"tags": ["food", "beverage"]
+			}`)
+			var exp Expense
+
+			res := util.Request(http.MethodPost, util.Uri("expenses"), body)
+			err := res.Decode(&exp)
+
+			assert.Nil(t, err)
+			assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+		})
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
