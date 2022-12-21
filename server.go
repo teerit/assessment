@@ -4,14 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"github.com/teerit/assessment/expense"
+)
+
+// https://yourbasic.org/golang/format-parse-string-time-date-example/
+const (
+	layoutUS = "January 2, 2006"
 )
 
 func main() {
@@ -22,18 +27,9 @@ func main() {
 
 	h := expense.ExpenseHandler(db)
 	e := echo.New()
-	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogStatus: true,
-		LogURI:    true,
-		BeforeNextFunc: func(c echo.Context) {
-			c.Set("customValueFromContext", time.Now().String())
-		},
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			value, _ := c.Get("customValueFromContext").(string)
-			fmt.Printf("REQUEST: uri: %v, status: %v, datetime: %v\n", v.URI, v.Status, value)
-			return nil
-		},
-	}))
+
+	e.Use(dateFormatMiddleware)
+	e.Use(requestLogger)
 
 	e.POST("/expenses", h.CreateExpenseHandler)
 	e.GET("/expenses/:id", h.GetExpenseByIdHandler)
@@ -66,6 +62,28 @@ func main() {
 		fmt.Printf("Error closing db connection %s", err)
 	} else {
 		fmt.Println("DB connection gracefully closed")
+	}
+}
+
+func dateFormatMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		authHeader := c.Request().Header.Get("Authorization")
+		_, err := time.Parse(layoutUS, authHeader)
+		if err != nil {
+			return c.String(http.StatusUnauthorized, "Unauthorized")
+		}
+		return next(c)
+	}
+}
+
+func requestLogger(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		req := c.Request()
+		res := c.Response()
+		c.Set("customValueFromContext", time.Now().String())
+		err := next(c)
+		fmt.Printf("REQUEST: uri: %v, status: %v, datetime: %v\n", req.RequestURI, res.Status, c.Get("customValueFromContext"))
+		return err
 	}
 }
 

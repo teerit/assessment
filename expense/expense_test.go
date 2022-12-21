@@ -120,6 +120,13 @@ func TestExpenseGetById(t *testing.T) {
 			mockRows: sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).
 				AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array([]string{"food", "beverage"})),
 		},
+		{
+			name:         "TestExpenseGetNotFound",
+			paramValue:   "1",
+			expectedCode: http.StatusNotFound,
+			expectedBody: "{\"message\":\"expense not found with given id\"}\n",
+			mockRows:     sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}),
+		},
 	}
 
 	for _, test := range tests {
@@ -219,7 +226,7 @@ func TestExpenseGetAll(t *testing.T) {
 		expectedStatus int
 	}{
 		{
-			name:           "test case 1",
+			name:           "TestExpenseGetAllSuccess",
 			requestBody:    "",
 			tags:           []string{"food", "beverage"},
 			expected:       "[{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}]",

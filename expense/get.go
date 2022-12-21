@@ -43,7 +43,6 @@ func (h *handler) GetExpensesHandler(c echo.Context) error {
 		err := rows.Scan(&exp.Id, &exp.Title, &exp.Amount, &exp.Note, pq.Array(&exp.Tags))
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, Err{Message: err.Error()})
-
 		}
 		exps = append(exps, exp)
 	}
