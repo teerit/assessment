@@ -14,6 +14,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 var (
@@ -60,7 +62,8 @@ func TestExpenseModelNotNil(t *testing.T) {
 
 func TestExpenseHandler(t *testing.T) {
 	db, _, err := sqlmock.New()
-	con := ExpenseHandler(db)
+	mockDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+	con := ExpenseHandler(mockDB)
 	if assert.NoError(t, err) {
 		assert.NotNil(t, con)
 	}
@@ -97,6 +100,8 @@ func TestExpenseCreate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			req, rec, e := testWrapper(test.json)
 			db, mock, err := sqlmock.New()
+			mockDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+
 			if err != nil {
 				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 			}
@@ -109,7 +114,7 @@ func TestExpenseCreate(t *testing.T) {
 					sqlmock.AnyArg(),
 					sqlmock.AnyArg()).WillReturnRows(test.mockRows)
 
-			h := handler{db}
+			h := handler{mockDB}
 			c := e.NewContext(req, rec)
 
 			err = h.CreateExpenseHandler(c)
@@ -149,6 +154,7 @@ func TestExpenseGetById(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			req, rec, e := testWrapper("")
 			db, mock, err := sqlmock.New()
+			mockDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 
 			if err != nil {
 				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
@@ -158,7 +164,7 @@ func TestExpenseGetById(t *testing.T) {
 				"SELECT (.+) FROM expenses WHERE id=\\$1").WithArgs(sqlmock.AnyArg()).
 				WillReturnRows(test.mockRows)
 
-			h := handler{db}
+			h := handler{mockDB}
 			c := e.NewContext(req, rec)
 			c.SetPath("/expenses/:id")
 			c.SetParamNames("id")
@@ -205,6 +211,8 @@ func TestExpenseUpdateById(t *testing.T) {
 			req, rec, e := testWrapper(test.requestBody)
 
 			db, mock, err := sqlmock.New()
+			mockDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+
 			stmt := mock.ExpectPrepare("UPDATE expenses SET title=\\$2, amount=\\$3, note=\\$4, tags=\\$5 WHERE id=\\$1")
 			stmt.ExpectExec().
 				WithArgs(
@@ -217,7 +225,7 @@ func TestExpenseUpdateById(t *testing.T) {
 			if err != nil {
 				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 			}
-			h := handler{db}
+			h := handler{mockDB}
 			c := e.NewContext(req, rec)
 			c.SetPath("/expenses/:id")
 			c.SetParamNames("id")
@@ -258,11 +266,13 @@ func TestExpenseGetAll(t *testing.T) {
 				AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array(&test.tags))
 
 			db, mock, err := sqlmock.New()
+			mockDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+
 			mock.ExpectQuery("SELECT (.+) FROM expenses").WillReturnRows(mockRows)
 			if err != nil {
 				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 			}
-			h := handler{db}
+			h := handler{mockDB}
 			c := e.NewContext(req, rec)
 
 			err = h.GetExpensesHandler(c)

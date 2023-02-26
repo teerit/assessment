@@ -1,20 +1,23 @@
 package expense
 
-import "database/sql"
+import (
+	"github.com/lib/pq"
+	"gorm.io/gorm"
+)
 
 type Expense struct {
-	Id     int      `json:"id"`
-	Title  string   `json:"title"`
-	Amount float64  `json:"amount"`
-	Note   string   `json:"note"`
-	Tags   []string `json:"tags"`
+	Id     int            `json:"id"`
+	Title  string         `json:"title"`
+	Amount float64        `json:"amount"`
+	Note   string         `json:"note"`
+	Tags   pq.StringArray `gorm:"type:text[]"`
 }
 
 type handler struct {
-	DB *sql.DB
+	DB *gorm.DB
 }
 
-func ExpenseHandler(db *sql.DB) *handler {
+func ExpenseHandler(db *gorm.DB) *handler {
 	return &handler{db}
 }
 
