@@ -18,7 +18,7 @@ func (h *handler) GetExpenseByIdHandler(c echo.Context) error {
 
 	exp := Expense{}
 	if result := h.DB.First(&exp, rowId); result.Error != nil {
-		log.Println(result.Error)
+		return c.JSON(http.StatusNotFound, nil)
 	}
 
 	return c.JSON(http.StatusOK, exp)

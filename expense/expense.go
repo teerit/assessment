@@ -10,7 +10,7 @@ type Expense struct {
 	Title  string         `json:"title"`
 	Amount float64        `json:"amount"`
 	Note   string         `json:"note"`
-	Tags   pq.StringArray `gorm:"type:text[]"`
+	Tags   pq.StringArray `gorm:"type:text[]" json:"tags"`
 }
 
 type handler struct {

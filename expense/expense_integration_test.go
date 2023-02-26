@@ -78,7 +78,7 @@ func TestITExpenses(t *testing.T) {
 
 		t.Run("TestGetExpenseByIdNotFound", func(t *testing.T) {
 			var lastExp Expense
-			res := util.Request(http.MethodGet, util.Uri("expenses", "0"), nil)
+			res := util.Request(http.MethodGet, util.Uri("expenses", "9999"), nil)
 			err := res.Decode(&lastExp)
 			assert.Nil(t, err)
 			assert.Equal(t, http.StatusNotFound, res.StatusCode)
