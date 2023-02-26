@@ -1,6 +1,3 @@
-//go:build unit
-// +build unit
-
 package expense
 
 // unit test
@@ -56,7 +53,7 @@ func TestExpenseModelNotNil(t *testing.T) {
 		assert.Equal(t, "buy a new phone", exp.Title)
 		assert.Equal(t, 39000.00, exp.Amount)
 		assert.Equal(t, "buy a new phone", exp.Note)
-		assert.Equal(t, []string{"gadget", "shopping"}, exp.Tags)
+		assert.Equal(t, pq.StringArray{"gadget", "shopping"}, exp.Tags)
 	}
 }
 
@@ -252,7 +249,7 @@ func TestExpenseGetAll(t *testing.T) {
 		{
 			name:           "TestExpenseGetAllSuccess",
 			requestBody:    "",
-			tags:           []string{"food", "beverage"},
+			tags:           pq.StringArray{"food", "beverage"},
 			expected:       "[{\"id\":1,\"title\":\"strawberry smoothie\",\"amount\":79,\"note\":\"night market promotion discount 10 bath\",\"tags\":[\"food\",\"beverage\"]}]",
 			expectedStatus: http.StatusOK,
 		},

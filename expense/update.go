@@ -25,6 +25,7 @@ func (h *handler) UpdateExpenseHandler(c echo.Context) error {
 		fmt.Println(result.Error)
 	}
 
+	exp.Id = rowId
 	exp.Title = updatedExp.Title
 	exp.Amount = updatedExp.Amount
 	exp.Note = updatedExp.Note
