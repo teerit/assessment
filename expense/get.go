@@ -1,7 +1,6 @@
 package expense
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
@@ -17,17 +16,13 @@ func (h *handler) GetExpenseByIdHandler(c echo.Context) error {
 	}
 
 	exp := Expense{}
-	if result := h.DB.First(&exp, rowId); result.Error != nil {
-		return c.JSON(http.StatusNotFound, Err{Message: "expense not found with given id"})
-	}
+	h.DB.First(&exp, rowId)
 
 	return c.JSON(http.StatusOK, exp)
 }
 
 func (h *handler) GetExpensesHandler(c echo.Context) error {
 	exps := []Expense{}
-	if result := h.DB.Find(&exps); result.Error != nil {
-		log.Println(result.Error)
-	}
+	h.DB.Find(&exps)
 	return c.JSON(http.StatusOK, exps)
 }

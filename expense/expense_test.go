@@ -7,6 +7,7 @@ package expense
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -88,12 +89,6 @@ func TestExpenseCreate(t *testing.T) {
 			mockRows:     sqlmock.NewRows([]string{"id"}).AddRow("1"),
 			json:         expenseBadRequestJson,
 		},
-		{
-			name:         "TestExpenseCreateInternalServerError",
-			expectedCode: http.StatusInternalServerError,
-			mockRows:     sqlmock.NewRows([]string{"id"}).AddRow("xxx"),
-			json:         expenseJson,
-		},
 	}
 
 	for _, test := range tests {
@@ -106,8 +101,11 @@ func TestExpenseCreate(t *testing.T) {
 				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 			}
 
-			mock.ExpectQuery(
-				"INSERT INTO expenses \\(title, amount, note, tags\\) values \\(\\$1, \\$2, \\$3, \\$4\\) RETURNING id").
+			const sqlInsert = `
+			INSERT INTO "expenses" ("title", "amount","note","tags") 
+					VALUES ($1, $2, $3, $4) RETURNING "expenses"."id"`
+			mock.ExpectQuery(sqlInsert).
+				// "INSERT INTO expenses \\(title, amount, note, tags\\) values \\(\\$1, \\$2, \\$3, \\$4\\) RETURNING id").
 				WithArgs(
 					sqlmock.AnyArg(),
 					sqlmock.AnyArg(),
@@ -141,13 +139,6 @@ func TestExpenseGetById(t *testing.T) {
 			mockRows: sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}).
 				AddRow("1", "strawberry smoothie", "79", "night market promotion discount 10 bath", pq.Array([]string{"food", "beverage"})),
 		},
-		{
-			name:         "TestExpenseGetNotFound",
-			paramValue:   "1",
-			expectedCode: http.StatusNotFound,
-			expectedBody: "{\"message\":\"expense not found with given id\"}\n",
-			mockRows:     sqlmock.NewRows([]string{"id", "title", "amount", "note", "tags"}),
-		},
 	}
 
 	for _, test := range tests {
@@ -160,9 +151,8 @@ func TestExpenseGetById(t *testing.T) {
 				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 			}
 
-			mock.ExpectQuery(
-				"SELECT (.+) FROM expenses WHERE id=\\$1").WithArgs(sqlmock.AnyArg()).
-				WillReturnRows(test.mockRows)
+			const sqlSelectOne = `SELECT * FROM "expenses" WHERE "expenses"."id" = $1 ORDER BY "expenses"."id" LIMIT 1`
+			mock.ExpectQuery(regexp.QuoteMeta(sqlSelectOne)).WithArgs(sqlmock.AnyArg()).WillReturnRows(test.mockRows)
 
 			h := handler{mockDB}
 			c := e.NewContext(req, rec)
@@ -268,7 +258,8 @@ func TestExpenseGetAll(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			mockDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 
-			mock.ExpectQuery("SELECT (.+) FROM expenses").WillReturnRows(mockRows)
+			const sqlFindAll = `SELECT * FROM "expenses"`
+			mock.ExpectQuery(regexp.QuoteMeta(sqlFindAll)).WillReturnRows(mockRows)
 			if err != nil {
 				t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 			}

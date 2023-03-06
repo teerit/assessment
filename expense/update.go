@@ -1,7 +1,6 @@
 package expense
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -21,9 +20,7 @@ func (h *handler) UpdateExpenseHandler(c echo.Context) error {
 	}
 
 	exp := Expense{}
-	if result := h.DB.First(&exp, rowId); result.Error != nil {
-		fmt.Println(result.Error)
-	}
+	h.DB.First(&exp, rowId)
 
 	exp.Id = rowId
 	exp.Title = updatedExp.Title

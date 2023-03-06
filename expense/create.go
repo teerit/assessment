@@ -1,7 +1,6 @@
 package expense
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -15,9 +14,7 @@ func (h *handler) CreateExpenseHandler(c echo.Context) error {
 	}
 
 	// Append to the Books table
-	if result := h.DB.Create(&exp); result.Error != nil {
-		log.Println(result.Error)
-	}
+	h.DB.Create(&exp)
 
 	return c.JSON(http.StatusCreated, exp)
 }
