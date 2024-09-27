@@ -15,10 +15,7 @@ import (
 )
 
 func main() {
-	db, err := db.InitDB()
-	if err != nil {
-		fmt.Printf("Error initial db connection %s", err)
-	}
+	db := db.InitDB()
 
 	h := expense.ExpenseHandler(db)
 	e := echo.New()
@@ -53,9 +50,4 @@ func main() {
 		fmt.Println("Server gracefully stopped")
 	}
 
-	if err := h.DB.Close(); err != nil {
-		fmt.Printf("Error closing db connection %s", err)
-	} else {
-		fmt.Println("DB connection gracefully closed")
-	}
 }

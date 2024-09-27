@@ -6,7 +6,6 @@ package expense
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -19,12 +18,14 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/teerit/assessment/util"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 func TestITExpenses(t *testing.T) {
 	eh := echo.New()
 	go func(e *echo.Echo) {
-		db, err := sql.Open("postgres", "postgresql://root:root@db/assessment-db?sslmode=disable")
+		db, err := gorm.Open(postgres.Open("postgresql://root:root@db/assessment-db?sslmode=disable"), &gorm.Config{})
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -77,7 +78,7 @@ func TestITExpenses(t *testing.T) {
 
 		t.Run("TestGetExpenseByIdNotFound", func(t *testing.T) {
 			var lastExp Expense
-			res := util.Request(http.MethodGet, util.Uri("expenses", "0"), nil)
+			res := util.Request(http.MethodGet, util.Uri("expenses", "9999"), nil)
 			err := res.Decode(&lastExp)
 			assert.Nil(t, err)
 			assert.Equal(t, http.StatusNotFound, res.StatusCode)

@@ -1,32 +1,23 @@
 package db
 
 import (
-	"database/sql"
-	"fmt"
+	"log"
 	"os"
+
+	"github.com/teerit/assessment/expense"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-func InitDB() (*sql.DB, error) {
+func InitDB() *gorm.DB {
 	connStr := os.Getenv("DATABASE_URL")
-	db, err := sql.Open("postgres", connStr)
+	db, err := gorm.Open(postgres.Open(connStr), &gorm.Config{})
+
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
 
-	createTable := `
-	CREATE TABLE IF NOT EXISTS expenses (
-		id SERIAL PRIMARY KEY,
-		title TEXT,
-		amount FLOAT,
-		note TEXT,
-		tags TEXT[]
-	);
-	`
+	db.AutoMigrate(&expense.Expense{})
 
-	_, err = db.Exec(createTable)
-	if err != nil {
-		return nil, fmt.Errorf("can't create table: %w", err)
-	}
-
-	return db, nil
+	return db
 }
